@@ -9,19 +9,30 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
+import com.github.pwittchen.reactivenetwork.library.rx2.ReactiveNetwork;
+import com.google.android.gms.tasks.OnCanceledListener;
 import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FirebaseFirestoreSettings;
 
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.schedulers.Schedulers;
+
 public class MainActivity extends AppCompatActivity {
 
     public static final String TAG = "MainActivity";
     private FirebaseFirestore db;
-    private TextView textView;
-    private int retry;
+    private TextView product;
+    private TextView connection;
+    private Disposable connectivityListener;
+    private Boolean internetConnected = true;
+    private Boolean networkConnected = true;
+    private Integer status;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -31,6 +42,7 @@ public class MainActivity extends AppCompatActivity {
 
         db = FirebaseFirestore.getInstance();
 
+
         // Disable offline data
         FirebaseFirestoreSettings settings = new FirebaseFirestoreSettings.Builder()
                 .setPersistenceEnabled(false)
@@ -38,12 +50,14 @@ public class MainActivity extends AppCompatActivity {
         db.setFirestoreSettings(settings);
 
         Button button = findViewById(R.id.button);
-        textView = findViewById(R.id.text);
+        product = findViewById(R.id.tv_product);
+        connection = findViewById(R.id.tv_connection);
 
         button.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 Log.d(TAG, "onClick");
-                getData(retry);
+                if (!internetConnected) return;
+                getData(0);
             }
         });
     }
@@ -64,19 +78,24 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         Log.d(TAG, "onPause");
+
+        if (connectivityListener != null && !connectivityListener.isDisposed())
+            connectivityListener.dispose();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         Log.d(TAG, "onResume");
+
+        connectivityListener();
     }
 
     public void getData(final int retry) {
 
-        textView.setText("...");
+        product.setText("...");
 
-        DocumentReference docRef = db.collection("products").document("TJDXTbUfGFhCHrqkLF7H");
+        DocumentReference docRef = db.collection("products").document("cCvdY5Sc0aKnhaXWSUML");
         docRef.get().addOnCompleteListener(new OnCompleteListener<DocumentSnapshot>() {
             @Override
             public void onComplete(@NonNull Task<DocumentSnapshot> task) {
@@ -84,13 +103,15 @@ public class MainActivity extends AppCompatActivity {
                 if (task.isSuccessful()) {
                     DocumentSnapshot document = task.getResult();
                     if (document.exists()) {
-                        Log.d(TAG, "DocumentSnapshot data: " + document.getData());
-                        textView.setText((String) document.getData().get("name"));
+                        Log.d(TAG, "Data: " + document.getData());
+                        product.setText((String) document.getData().get("name"));
 
                     } else {
                         Log.d(TAG, "No such document");
                     }
                 } else {
+                    Log.d(TAG, task.getException().getMessage());
+
                     if (retry < 20) {
                         Log.d(TAG, "retry: " + retry);
 
@@ -102,11 +123,86 @@ public class MainActivity extends AppCompatActivity {
                             }
                         }, 1000);
                     }
-
                 }
             }
+        }).addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(@NonNull Exception e) {
+                Log.d(TAG, "Failure: " + e.getMessage());
+            }
+        }).addOnCanceledListener(new OnCanceledListener() {
+            @Override
+            public void onCanceled() {
+                Log.d(TAG, "Canceled");
+            }
         });
-
-
     }
+
+    private void connectivityListener() {
+
+        connectivityListener = ReactiveNetwork
+                .observeInternetConnectivity()
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(isConnectedToInternet -> {
+                    internetConnected = isConnectedToInternet;
+                    networkConnected = isOnline();
+                    setConnectivity();
+                });
+    }
+
+    public void setConnectivity() {
+
+        if (!networkConnected)
+            setOffline();
+        else if (!internetConnected)
+            setLowConnection();
+        else
+            setOnLine();
+    }
+
+
+    public boolean isOnline() {
+        int newStatus = io.yuka.firestore_connectivity_test.Connectivity.getConnectivityStatusString(getApplicationContext());
+        if (status == null || status != newStatus)
+        status = newStatus;
+        return status > 0;
+    }
+
+    private void setOffline() {
+
+        if (connection.getText() == "Aucune connexion") return;
+        Log.d(TAG, "Client is offline");
+
+        connection.setText("Aucune connexion");
+        connection.setAlpha(1);
+    }
+
+
+    private void setLowConnection() {
+
+        if (connection.getText() == "Connexion insuffisante") return;
+        Log.d(TAG, "Client is slow");
+
+        connection.setText("Connexion insuffisante");
+        connection.setAlpha(1);
+    }
+
+    private void setOnLine() {
+
+        if (connection.getText() == "" || connection.getText() == "Connecté") return;
+        Log.d(TAG, "Client is online");
+
+        connection.setText("  Connecté");
+
+        final Handler handlerOn = new Handler();
+        handlerOn.postDelayed(() -> {
+            // Do something after 5s = 5000ms
+            // Check if it's still online
+            if (internetConnected) {
+                connection.setAlpha(0);
+            }
+        }, 5000);
+    }
+
 }
