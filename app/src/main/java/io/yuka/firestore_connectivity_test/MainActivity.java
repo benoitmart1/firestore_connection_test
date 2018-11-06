@@ -173,9 +173,7 @@ public class MainActivity extends AppCompatActivity {
 
         if (connection.getText() == "Aucune connexion") return;
         Log.d(TAG, "Client is offline");
-
-        connection.setText("Aucune connexion");
-        connection.setAlpha(1);
+        connection.setText("Client is offline");
     }
 
 
@@ -183,17 +181,14 @@ public class MainActivity extends AppCompatActivity {
 
         if (connection.getText() == "Connexion insuffisante") return;
         Log.d(TAG, "Client is slow");
-
-        connection.setText("Connexion insuffisante");
-        connection.setAlpha(1);
+        connection.setText("Client is slow");
     }
 
     private void setOnLine() {
 
         if (connection.getText() == "" || connection.getText() == "Connecté") return;
         Log.d(TAG, "Client is online");
-
-        connection.setText("  Connecté");
+        connection.setText("Client is online");
 
         final Handler handlerOn = new Handler();
         handlerOn.postDelayed(() -> {
