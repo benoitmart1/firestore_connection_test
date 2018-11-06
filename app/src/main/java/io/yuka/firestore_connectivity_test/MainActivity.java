@@ -1,6 +1,7 @@
 package io.yuka.firestore_connectivity_test;
 
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -20,6 +21,7 @@ public class MainActivity extends AppCompatActivity {
     public static final String TAG = "MainActivity";
     private FirebaseFirestore db;
     private TextView textView;
+    private int retry;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
         button.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 Log.d(TAG, "onClick");
-                getData();
+                getData(retry);
             }
         });
     }
@@ -70,8 +72,7 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "onResume");
     }
 
-    public void getData(){
-        Log.d(TAG, "getData");
+    public void getData(final int retry) {
 
         textView.setText("...");
 
@@ -79,6 +80,7 @@ public class MainActivity extends AppCompatActivity {
         docRef.get().addOnCompleteListener(new OnCompleteListener<DocumentSnapshot>() {
             @Override
             public void onComplete(@NonNull Task<DocumentSnapshot> task) {
+
                 if (task.isSuccessful()) {
                     DocumentSnapshot document = task.getResult();
                     if (document.exists()) {
@@ -89,7 +91,18 @@ public class MainActivity extends AppCompatActivity {
                         Log.d(TAG, "No such document");
                     }
                 } else {
-                    Log.d(TAG, "get failed with ",task.getException());
+                    if (retry < 20) {
+                        Log.d(TAG, "retry: " + retry);
+
+                        final Handler handler = new Handler();
+                        handler.postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                getData(retry + 1);
+                            }
+                        }, 1000);
+                    }
+
                 }
             }
         });
